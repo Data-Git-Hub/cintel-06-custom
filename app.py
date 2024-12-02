@@ -1,9 +1,7 @@
 from shiny import App, ui, render, reactive
 from pathlib import Path
 import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
-import base64
+import plotly.graph_objects as go
 
 # Define the application UI
 app_ui = ui.page_sidebar(
@@ -21,7 +19,11 @@ app_ui = ui.page_sidebar(
         ui.p("Add any additional content here!"),  # Additional sidebar text
     ),
     ui.navset_tab(
-        ui.nav_panel("Graph 1", ui.output_ui("line_graph_1_output")),
+        ui.nav_panel(
+            "Graph 1",
+            ui.h3(ui.output_text("graph_1_header")),  # Dynamic header
+            ui.output_ui("line_graph_1_output"),
+        ),
         ui.nav_panel("Graph 2", ui.output_ui("line_graph_2_output")),
         ui.nav_panel("Table", ui.output_data_frame("frame_output")),
     ),
@@ -42,14 +44,15 @@ def server(input, output, session):
             print(f"Error loading data: {e}")
             return pd.DataFrame()  # Return an empty DataFrame on error
 
-    def plot_to_base64(fig):
-        """Convert Matplotlib figure to Base64 image."""
-        buf = BytesIO()
-        fig.savefig(buf, format="png")
-        buf.seek(0)
-        base64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
-        buf.close()
-        return f"data:image/png;base64,{base64_image}"
+    @output
+    @render.text
+    def graph_1_header():
+        selected_columns = input.graph_1_options()
+        if not selected_columns:
+            return (
+                "Please select an option from the sidebar to display additional data."
+            )
+        return "Graph 1: Food Price Trends Over Time"
 
     @output
     @render.ui
@@ -59,45 +62,61 @@ def server(input, output, session):
             print("No data available for Graph 1.")
             return ui.HTML("<p>Error: No data available for Graph 1.</p>")
 
-        # Create the graph
-        fig, ax = plt.subplots(figsize=(10, 5))
+        # Create the graph using Plotly
+        fig = go.Figure()
 
-        # Permanent "All food" line
-        ax.plot(
-            data["Date"], data["All food"], marker="o", label="All Food", color="red"
+        # Always display "All food" data
+        fig.add_trace(
+            go.Scatter(
+                x=data["Date"],
+                y=data["All food"],
+                mode="lines+markers",
+                name="All Food",
+                marker=dict(size=8),
+                hovertemplate="Date: %{x}<br>All Food: %{y}<extra></extra>",
+                line=dict(color="red"),
+            )
         )
 
-        # Add lines based on selected options
+        # Add lines dynamically based on selected options
         selected_columns = input.graph_1_options()
         for col in selected_columns:
             if col == "food_away":
-                ax.plot(
-                    data["Date"],
-                    data["Food away from home"],
-                    marker="s",
-                    label="Food away from Home",
-                    color="blue",
+                fig.add_trace(
+                    go.Scatter(
+                        x=data["Date"],
+                        y=data["Food away from home"],
+                        mode="lines+markers",
+                        name="Food away from Home",
+                        marker=dict(size=8),
+                        hovertemplate="Date: %{x}<br>Food away from Home: %{y}<extra></extra>",
+                        line=dict(color="blue"),
+                    )
                 )
             elif col == "food_at_home":
-                ax.plot(
-                    data["Date"],
-                    data["Food at home"],
-                    marker="^",
-                    label="Food at Home",
-                    color="green",
+                fig.add_trace(
+                    go.Scatter(
+                        x=data["Date"],
+                        y=data["Food at home"],
+                        mode="lines+markers",
+                        name="Food at Home",
+                        marker=dict(size=8),
+                        hovertemplate="Date: %{x}<br>Food at Home: %{y}<extra></extra>",
+                        line=dict(color="green"),
+                    )
                 )
 
-        ax.set_title("Graph 1: Food Price Trends Over Time")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Price Index")
-        ax.set_ylim(-5, 20)  # Set the y-axis range
-        ax.legend()
-        ax.grid(True)
+        fig.update_layout(
+            title=None,  # Title removed as the header is dynamic
+            xaxis_title="Date",
+            yaxis_title="Price Index",
+            yaxis=dict(range=[-5, 15]),
+            template="plotly_white",
+            hovermode="closest",
+        )
 
-        # Convert the plot to Base64 and embed it as an <img> tag
-        img_src = plot_to_base64(fig)
-        plt.close(fig)
-        return ui.HTML(f'<img src="{img_src}" alt="Graph 1" style="width:100%;">')
+        # Render the Plotly graph
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
     @output
     @render.ui
@@ -107,26 +126,32 @@ def server(input, output, session):
             print("No data available for Graph 2.")
             return ui.HTML("<p>Error: No data available for Graph 2.</p>")
 
-        # Create the line graph for Graph 2
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(
-            data["Date"],
-            data["Meats poultry and fish"],
-            marker="s",
-            label="Meats, Poultry, and Fish",
-            color="orange",
-        )
-        ax.set_title("Graph 2: Meats, Poultry, and Fish Price Trends Over Time")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Meats, Poultry, and Fish")
-        ax.set_ylim(-25, 55)  # Adjusted y-axis range for consistency
-        ax.legend()
-        ax.grid(True)
+        # Create the graph for Graph 2 using Plotly
+        fig = go.Figure()
 
-        # Convert the plot to Base64 and embed it as an <img> tag
-        img_src = plot_to_base64(fig)
-        plt.close(fig)
-        return ui.HTML(f'<img src="{img_src}" alt="Graph 2" style="width:100%;">')
+        fig.add_trace(
+            go.Scatter(
+                x=data["Date"],
+                y=data["Meats poultry and fish"],
+                mode="lines+markers",
+                name="Meats, Poultry, and Fish",
+                marker=dict(size=8),
+                hovertemplate="Date: %{x}<br>Meats, Poultry, and Fish: %{y}<extra></extra>",
+                line=dict(color="orange"),
+            )
+        )
+
+        fig.update_layout(
+            title="Graph 2: Meats, Poultry, and Fish Price Trends Over Time",
+            xaxis_title="Date",
+            yaxis_title="Price Index",
+            yaxis=dict(range=[-25, 55]),
+            template="plotly_white",
+            hovermode="closest",
+        )
+
+        # Render the Plotly graph
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
     @output
     @render.data_frame
