@@ -15,16 +15,34 @@ app_ui = ui.page_sidebar(
                 "food_at_home": "Food at Home",
             },
         ),
+        ui.h3("Graph 2"),  # Title for Graph 2 selectize
+        ui.input_selectize(
+            "graph_2_options",  # Input ID
+            "Select categories for Graph 2:",
+            choices=[
+                "Meats",
+                "Beef and veal",
+                "Pork",
+                "Other meats",
+                "Poultry",
+                "Fish and seafood",
+            ],
+            multiple=True,
+        ),
         ui.h3("Sidebar Content"),  # Sidebar additional title
         ui.p("Add any additional content here!"),  # Additional sidebar text
     ),
     ui.navset_tab(
         ui.nav_panel(
             "Graph 1",
-            ui.h3(ui.output_text("graph_1_header")),  # Dynamic header
+            ui.h3("Graph 1: Food Price Trends"),  # Static header
             ui.output_ui("line_graph_1_output"),
         ),
-        ui.nav_panel("Graph 2", ui.output_ui("line_graph_2_output")),
+        ui.nav_panel(
+            "Graph 2",
+            ui.h3("Graph 2: Meats, Poultry, and Fish Price Trends"),  # Static header
+            ui.output_ui("line_graph_2_output"),
+        ),
         ui.nav_panel("Table", ui.output_data_frame("frame_output")),
     ),
 )
@@ -34,25 +52,16 @@ app_ui = ui.page_sidebar(
 def server(input, output, session):
     @reactive.Calc
     def dat():
-        # Load data from the CSV file
+        # Load data from the CSV file and normalize column names
         infile = Path(__file__).parent / "USDA_75_23_CPI.csv"
         try:
             df = pd.read_csv(infile)
+            df.columns = df.columns.str.strip()  # Normalize column names
             print(df.head())  # Debug: Print first few rows of the data
             return df
         except Exception as e:
             print(f"Error loading data: {e}")
             return pd.DataFrame()  # Return an empty DataFrame on error
-
-    @output
-    @render.text
-    def graph_1_header():
-        selected_columns = input.graph_1_options()
-        if not selected_columns:
-            return (
-                "Please select an option from the sidebar to display additional data."
-            )
-        return "Graph 1: Food Price Trends Over Time"
 
     @output
     @render.ui
@@ -107,7 +116,6 @@ def server(input, output, session):
                 )
 
         fig.update_layout(
-            title=None,  # Title removed as the header is dynamic
             xaxis_title="Date",
             yaxis_title="Price Index",
             yaxis=dict(range=[-5, 15]),
@@ -129,6 +137,7 @@ def server(input, output, session):
         # Create the graph for Graph 2 using Plotly
         fig = go.Figure()
 
+        # Always display "Meats poultry and fish"
         fig.add_trace(
             go.Scatter(
                 x=data["Date"],
@@ -141,11 +150,25 @@ def server(input, output, session):
             )
         )
 
+        # Add lines dynamically based on selected options
+        selected_categories = input.graph_2_options()
+        for category in selected_categories:
+            if category in data.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data["Date"],
+                        y=data[category],
+                        mode="lines+markers",
+                        name=category,
+                        marker=dict(size=8),
+                        hovertemplate=f"Date: %{{x}}<br>{category}: %{{y}}<extra></extra>",
+                    )
+                )
+
         fig.update_layout(
-            title="Graph 2: Meats, Poultry, and Fish Price Trends Over Time",
             xaxis_title="Date",
             yaxis_title="Price Index",
-            yaxis=dict(range=[-25, 55]),
+            yaxis=dict(range=[-10, 30]),
             template="plotly_white",
             hovermode="closest",
         )
