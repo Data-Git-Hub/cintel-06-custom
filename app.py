@@ -2,6 +2,8 @@ from shiny import App, ui, render, reactive
 from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
 # Define the application UI
 app_ui = ui.page_sidebar(
@@ -29,8 +31,10 @@ app_ui = ui.page_sidebar(
             ],
             multiple=True,
         ),
-        ui.h3("Sidebar Content"),  # Sidebar additional title
-        ui.p("Add any additional content here!"),  # Additional sidebar text
+        ui.h3("Graph 3"),  # Title for Graph 3
+        ui.input_numeric(
+            "graph_3_numeric", "Enter a number:", 1, min=1, max=10
+        ),  # Numeric input box
     ),
     ui.navset_tab(
         ui.nav_panel(
@@ -42,6 +46,11 @@ app_ui = ui.page_sidebar(
             "Graph 2",
             ui.h3("Graph 2: Meats, Poultry, and Fish Price Trends"),  # Static header
             ui.output_ui("line_graph_2_output"),
+        ),
+        ui.nav_panel(
+            "Graph 3",
+            ui.h3("Graph 3: Eggs Price Trends"),  # Static header
+            ui.output_ui("line_graph_3_output"),
         ),
         ui.nav_panel("Table", ui.output_data_frame("frame_output")),
     ),
@@ -57,7 +66,6 @@ def server(input, output, session):
         try:
             df = pd.read_csv(infile)
             df.columns = df.columns.str.strip()  # Normalize column names
-            print(df.head())  # Debug: Print first few rows of the data
             return df
         except Exception as e:
             print(f"Error loading data: {e}")
@@ -118,7 +126,7 @@ def server(input, output, session):
         fig.update_layout(
             xaxis_title="Date",
             yaxis_title="Price Index",
-            yaxis=dict(range=[-5, 15]),
+            yaxis=dict(range=[-25, 55]),
             template="plotly_white",
             hovermode="closest",
         )
@@ -168,7 +176,74 @@ def server(input, output, session):
         fig.update_layout(
             xaxis_title="Date",
             yaxis_title="Price Index",
-            yaxis=dict(range=[-10, 30]),
+            yaxis=dict(range=[-25, 55]),
+            template="plotly_white",
+            hovermode="closest",
+        )
+
+        # Render the Plotly graph
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
+
+    @output
+    @render.ui
+    def line_graph_3_output():
+        data = dat()
+        if data.empty:
+            print("No data available for Graph 3.")
+            return ui.HTML("<p>Error: No data available for Graph 3.</p>")
+
+        # Prepare data for linear regression
+        X = data["Date"].values.reshape(-1, 1)
+        y = data["Eggs"].values
+        model = LinearRegression()
+        model.fit(X, y)
+
+        # Predict value for 2024
+        prediction_2024 = model.predict([[2024]])[0]
+
+        # Create the graph for Graph 3 using Plotly
+        fig = go.Figure()
+
+        # Always display "Eggs" data
+        fig.add_trace(
+            go.Scatter(
+                x=data["Date"],
+                y=data["Eggs"],
+                mode="lines+markers",
+                name="Eggs",
+                marker=dict(size=8),
+                hovertemplate="Date: %{x}<br>Eggs: %{y}<extra></extra>",
+                line=dict(color="purple"),
+            )
+        )
+
+        # Add trend line
+        trend_line = model.predict(X)
+        fig.add_trace(
+            go.Scatter(
+                x=data["Date"],
+                y=trend_line,
+                mode="lines",
+                name="Trend Line",
+                line=dict(color="blue", dash="dash"),
+            )
+        )
+
+        fig.add_annotation(
+            x=2024,
+            y=prediction_2024,
+            text=f"Predicted 2024: {prediction_2024:.2f}",
+            showarrow=True,
+            arrowhead=2,
+            ax=-50,
+            ay=-30,
+        )
+
+        fig.update_layout(
+            title="Graph 3: Eggs Price Trends with Prediction",
+            xaxis_title="Date",
+            yaxis_title="Price Index",
+            yaxis=dict(range=[-25, 55]),
             template="plotly_white",
             hovermode="closest",
         )
