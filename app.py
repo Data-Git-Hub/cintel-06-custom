@@ -2,8 +2,6 @@ from shiny import App, ui, render, reactive
 from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
-from sklearn.linear_model import LinearRegression
-import numpy as np
 
 # Define the application UI
 app_ui = ui.page_sidebar(
@@ -17,6 +15,7 @@ app_ui = ui.page_sidebar(
                 "food_at_home": "Food at Home",
             },
         ),
+        ui.hr(),  # Horizontal rule between Graph 1 and Graph 2
         ui.h3("Graph 2"),  # Title for Graph 2 selectize
         ui.input_selectize(
             "graph_2_options",  # Input ID
@@ -31,10 +30,24 @@ app_ui = ui.page_sidebar(
             ],
             multiple=True,
         ),
+        ui.hr(),  # Horizontal rule between Graph 2 and Graph 3
         ui.h3("Graph 3"),  # Title for Graph 3
-        ui.input_numeric(
-            "graph_3_numeric", "Enter a number:", 1, min=1, max=10
-        ),  # Numeric input box
+        ui.input_selectize(
+            "graph_3_select",  # Input ID
+            "Select a category for Graph 3:",
+            choices=[
+                "Fresh fruits and vegetables",
+                "Fresh fruits",
+                "Fresh vegetables",
+            ],
+            multiple=False,
+        ),
+        ui.hr(),  # Horizontal rule for visual clarity before the GitHub link
+        ui.a(
+            "Data-Git-Hub",
+            href="https://github.com/Data-Git-Hub",
+            target="_blank",
+        ),  # GitHub link
     ),
     ui.navset_tab(
         ui.nav_panel(
@@ -49,7 +62,7 @@ app_ui = ui.page_sidebar(
         ),
         ui.nav_panel(
             "Graph 3",
-            ui.h3("Graph 3: Eggs Price Trends"),  # Static header
+            ui.h3("Graph 3: Fruits and Vegetables Trends"),  # Updated header
             ui.output_ui("line_graph_3_output"),
         ),
         ui.nav_panel("Table", ui.output_data_frame("frame_output")),
@@ -76,10 +89,8 @@ def server(input, output, session):
     def line_graph_1_output():
         data = dat()
         if data.empty:
-            print("No data available for Graph 1.")
             return ui.HTML("<p>Error: No data available for Graph 1.</p>")
 
-        # Create the graph using Plotly
         fig = go.Figure()
 
         # Always display "All food" data
@@ -95,7 +106,6 @@ def server(input, output, session):
             )
         )
 
-        # Add lines dynamically based on selected options
         selected_columns = input.graph_1_options()
         for col in selected_columns:
             if col == "food_away":
@@ -126,12 +136,11 @@ def server(input, output, session):
         fig.update_layout(
             xaxis_title="Date",
             yaxis_title="Price Index",
-            yaxis=dict(range=[-25, 55]),
+            yaxis=dict(range=[-5, 15]),
             template="plotly_white",
             hovermode="closest",
         )
 
-        # Render the Plotly graph
         return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
     @output
@@ -139,10 +148,8 @@ def server(input, output, session):
     def line_graph_2_output():
         data = dat()
         if data.empty:
-            print("No data available for Graph 2.")
             return ui.HTML("<p>Error: No data available for Graph 2.</p>")
 
-        # Create the graph for Graph 2 using Plotly
         fig = go.Figure()
 
         # Always display "Meats poultry and fish"
@@ -158,7 +165,6 @@ def server(input, output, session):
             )
         )
 
-        # Add lines dynamically based on selected options
         selected_categories = input.graph_2_options()
         for category in selected_categories:
             if category in data.columns:
@@ -176,12 +182,11 @@ def server(input, output, session):
         fig.update_layout(
             xaxis_title="Date",
             yaxis_title="Price Index",
-            yaxis=dict(range=[-25, 55]),
+            yaxis=dict(range=[-10, 30]),
             template="plotly_white",
             hovermode="closest",
         )
 
-        # Render the Plotly graph
         return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
     @output
@@ -189,72 +194,51 @@ def server(input, output, session):
     def line_graph_3_output():
         data = dat()
         if data.empty:
-            print("No data available for Graph 3.")
             return ui.HTML("<p>Error: No data available for Graph 3.</p>")
 
-        # Prepare data for linear regression
-        X = data["Date"].values.reshape(-1, 1)
-        y = data["Eggs"].values
-        model = LinearRegression()
-        model.fit(X, y)
-
-        # Predict value for 2024
-        prediction_2024 = model.predict([[2024]])[0]
-
-        # Create the graph for Graph 3 using Plotly
         fig = go.Figure()
 
-        # Always display "Eggs" data
+        # Always display "Fruits and vegetables"
         fig.add_trace(
             go.Scatter(
                 x=data["Date"],
-                y=data["Eggs"],
+                y=data["Fruits and vegetables"],
                 mode="lines+markers",
-                name="Eggs",
+                name="Fruits and Vegetables",
                 marker=dict(size=8),
-                hovertemplate="Date: %{x}<br>Eggs: %{y}<extra></extra>",
+                hovertemplate="Date: %{x}<br>Fruits and Vegetables: %{y}<extra></extra>",
                 line=dict(color="purple"),
             )
         )
 
-        # Add trend line
-        trend_line = model.predict(X)
-        fig.add_trace(
-            go.Scatter(
-                x=data["Date"],
-                y=trend_line,
-                mode="lines",
-                name="Trend Line",
-                line=dict(color="blue", dash="dash"),
+        selected_column = input.graph_3_select()
+        if selected_column and selected_column in data.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=data["Date"],
+                    y=data[selected_column],
+                    mode="lines+markers",
+                    name=selected_column,
+                    marker=dict(size=8),
+                    hovertemplate=f"Date: %{{x}}<br>{selected_column}: %{{y}}<extra></extra>",
+                    line=dict(color="green"),
+                )
             )
-        )
-
-        fig.add_annotation(
-            x=2024,
-            y=prediction_2024,
-            text=f"Predicted 2024: {prediction_2024:.2f}",
-            showarrow=True,
-            arrowhead=2,
-            ax=-50,
-            ay=-30,
-        )
 
         fig.update_layout(
-            title="Graph 3: Eggs Price Trends with Prediction",
+            title="Graph 3: Fruits and Vegetables Trends",
             xaxis_title="Date",
             yaxis_title="Price Index",
-            yaxis=dict(range=[-25, 55]),
+            yaxis=dict(range=[-10, 20]),
             template="plotly_white",
             hovermode="closest",
         )
 
-        # Render the Plotly graph
         return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
     @output
     @render.data_frame
     def frame_output():
-        # Render the data frame output for the "Table" tab
         data = dat()
         if data.empty:
             return pd.DataFrame({"Error": ["No data available"]})
